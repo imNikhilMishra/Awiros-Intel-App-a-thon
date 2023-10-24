@@ -3,6 +3,7 @@ const cors = require('cors');
 const multer = require('multer'); // To handle file uploads
 const app = express();
 const { spawn } = require('child_process');
+const path = require('path');
 
 app.use(cors());
 app.use(express.json());
@@ -12,35 +13,42 @@ const PORT = process.env.PORT || 5000;
 const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
+
 app.post('/', upload.single('image'), (req, res) => {
-    const imageBuffer = req.file.buffer;
+    if (!req.file) {
+        return res.status(400).json({ error: 'No image uploaded' });
+    }
+    const userImageBuffer = req.file.buffer;
 
-    // Send the image directly to your ML model
-    sendImageToMLModel(imageBuffer, (mlResponse) => {
-        res.status(200).json({ message: 'Image sent to the ML model', mlResponse });
-    });
-});
+    const userImageBase64 = userImageBuffer.toString('base64');
 
-const sendImageToMLModel=(imageData, callback) =>{
-    // Replace this with code to send the image data to your ML model
-    // You might use an HTTP request or any other appropriate method
-    // For example, you can use the 'spawn' method to execute a Python script that communicates with your model.
-    // Make sure your ML model API endpoint and data format are appropriately configured.
+    const datasetImageFileName = 'Virat-Kohli-Cover-Drive.jpeg'; // Specify the filename
 
-    const pythonProcess = spawn('python', ['./Model/ssim_posturecorrection.py'], {
-        input: imageData
-    });
+    // Create the absolute path by joining __dirname with the relative path to the image file
+    const datasetImageFilePath = path.join(__dirname, 'Images', datasetImageFileName);
+    
+
+    const data = {
+        userImage: userImageBase64,
+        datasetImage: datasetImageFilePath,
+    };
+    
+    const dataJson = JSON.stringify(data);
+    const pythonProcess = spawn('python', ['./Model/ssi-model.py', JSON.stringify(dataJson)]);
+    // pythonProcess.stdin.write(JSON.stringify(data));
+    // pythonProcess.stdin.end();
 
     let mlResponse = '';
 
     pythonProcess.stdout.on('data', (data) => {
         mlResponse += data;
     });
-
+    
     pythonProcess.on('close', () => {
-        callback(mlResponse);
+        // Process the mlResponse and send it to the frontend
+        res.status(200).json({ mlResponse });
     });
-}
+});
 
 app.listen(PORT, () => {
     console.log(`Server running on port: ${PORT}`);
